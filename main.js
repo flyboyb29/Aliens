@@ -639,7 +639,7 @@ ASSET_MANAGER.downloadAll(function () {
 startGame = function () {
     this.gameEngine.entities[this.gameEngine.entities.length - 1].removeFromWorld = true;
     this.gameEngine.entities[this.gameEngine.entities.length - 2].removeFromWorld = true;
-
+    alert("To move ship left: left arrow; To move ship right: right arrow; to move ship down: down arrow; to move ship up: up arrow; To fire: space bar.");
     addLife();
     addShip();
     addAlienShips(3, 6);
