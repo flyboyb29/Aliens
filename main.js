@@ -1,15 +1,12 @@
-var sb1 = 0;
-var sb2 = 0;
-
 var alienRight;
-var aStartIndex;
-var aTotalShips;
 var shipIndex;
 var lifeIndex;
 var lifeCount;
 var score;
 var leval;
-
+var newGameImg;
+var loadGameImg;
+var saveGameImg;
 this.startButton;
 var mainLogo;
 var mainLogo1;
@@ -22,15 +19,19 @@ var space2;
 var pro1;
 var pro2;
 var explosion;
+var bg1;
+var bg2;
+var bg3;
+var bg4;
+var socket = io.connect("http://76.28.150.193:8888");
 
 // platforms animation
-function AnimationPlatform(image, frameWidth, frameHeight, imageX, imageY, imageScrolling) {
+function AnimationPlatform(image, frameWidth, frameHeight, imageX, imageY) {
     this.image = image;
     this.width = frameWidth;
     this.height = frameHeight;
     this.imageX = imageX;
     this.imageY = imageY;
-    this.scroll = imageScrolling;
     this.elapsedTime = 0;
 }
 
@@ -38,27 +39,8 @@ AnimationPlatform.prototype.drawFrame = function (tick, ctx, x, y, scaleBy) {
     var scaleBy = scaleBy || 1;
     this.elapsedTime += tick;
 
-    if (this.scroll) {
-        ctx.drawImage(this.image,
-                  sb2, 0,  // source from sheet
-                  this.width, this.height,
-                  this.imageX, this.imageY,
-                  this.width, this.height
-                  );
-
-        ctx.drawImage(this.image,
-                  sb1, 0,  // source from sheet
-                  this.width, this.height,
-                  this.imageX, this.imageY,
-                  this.width, this.height
-                  );
-    } else {
-            ctx.drawImage(this.image,
-                0, 0, this.width, this.height,
-                this.imageX + x, this.imageY + y,
-                this.width * scaleBy, this.height * scaleBy);
-        
-    }
+    ctx.drawImage(this.image, 0, 0, this.width, this.height,
+        this.imageX + x, this.imageY + y, this.width * scaleBy, this.height * scaleBy);
 }
 AnimationPlatform.prototype.currentFrame = function () {
     return Math.floor(this.elapsedTime / this.frameDuration);
@@ -150,8 +132,6 @@ ProjectileExp.prototype.constructor = ProjectileExp;
 
 ProjectileExp.prototype.update = function () {
 
-    //this.place += 1;
-    //this.game.entities[this.index].removeFromWorld = (this.place >= 12);
     Entity.prototype.update.call(this);
 }
 
@@ -166,17 +146,18 @@ ProjectileExp.prototype.draw = function (ctx) {
  * Basic Button
  */
 
-function Button(game, platformSprite, width, height, startX, startY, scroll, placeX, placeY) {
+function Button(game, platformSprite, width, height, startX, startY, scroll, placeX, placeY, backCode) {
 
     this.animation = new AnimationPlatform(platformSprite, width, height, startX, startY, scroll);
     //game.addEntity(new Block(this.game, placeX - 10, placeY - 10, width + 20, height + 20, Color, 50, false, 10));
-
+    this.game = game;
     this.startX = startX;
     this.startY = startY;
     this.width = width;
     this.height = height;
     this.x = placeX;
     this.y = placeY;
+    this.code = backCode;
     Entity.call(this, game, placeX, placeY);
     this.radius = height / 2;
 }
@@ -204,7 +185,22 @@ Button.prototype.bottom = function () {
 Button.prototype.update = function () {
 
     if (this.game.mouseX >= this.beginingX() && this.game.mouseX <= this.endingX()) {
-        if (this.game.mouseY >= this.top() && this.game.mouseY <= this.bottom()) startGame();
+        if (this.game.mouseY >= this.top() && this.game.mouseY <= this.bottom()) {
+            switch (this.code) {
+                case 0:
+                    gameMenu();
+                    break;
+                case 1:
+                    newGame();
+                    break;
+                case 2:
+                    loadGame();
+                    break;
+                case 3:
+                    saveGame();
+                    break;
+            }
+        }
     }
     Entity.prototype.update.call(this);
 }
@@ -365,6 +361,7 @@ function Alien(game, AlienSprite, frameHeight, frameWidth, startX, startY,
     this.rightOffset = rightOffset;
     this.check = true;
     this.firePic = fireSprite;
+    this.game = game;
 
     Entity.call(this, game, placeX, placeY);
 }
@@ -392,12 +389,12 @@ Alien.prototype.bottom = function () {
 Alien.prototype.update = function () {
 
     if (this.x <= 0) {
-        alienRight = true;
+        this.game.alienRight = true;
     } else if (this.endingX() >= 801) {
-        alienRight = false;
+        this.game.alienRight = false;
     }
 
-   if (alienRight) {
+    if (this.game.alienRight) {
         this.x += this.speed;
     } else {
         this.x -= this.speed;
@@ -512,7 +509,7 @@ checkShot = function () {
                                 this.gameEngine.alienShips.splice(j, 1);
                                 this.gameEngine.firedShots[i].removeFromWorld = true;
                                 this.gameEngine.firedShots.splice(i, 1);
-                                this.gameEngine.score += 1;
+                                this.gameEngine.score++;
                                 console.log(this.gameEngine.score);
                                 kill = true;
                                 projectileExplosion(killX, killY);
@@ -521,6 +518,7 @@ checkShot = function () {
                                         this.gameEngine.firedShots[z].y = -40;
                                         this.gameEngine.firedShots[z].removeFromWorld = true;
                                     }
+                                    pickBackground();
                                     addAlienShips(3, 6);
                                 }
                             }
@@ -568,8 +566,7 @@ function Block(game, startX, startY, width, height, color, trans, fill, border) 
 Block.prototype = new Entity();
 Block.prototype.constructor = Block;
 
-Block.prototype.update = function () {
-}
+Block.prototype.update = function () {}
 
 Block.prototype.draw = function (ctx) {
     ctx.fillStyle = this.fColor;
@@ -591,6 +588,8 @@ ASSET_MANAGER.queueDownload("./img/alien.png");
 ASSET_MANAGER.queueDownload("./img/ship.png");
 ASSET_MANAGER.queueDownload("./img/space1.png");
 ASSET_MANAGER.queueDownload("./img/space2.png");
+ASSET_MANAGER.queueDownload("./img/space3.jpg");
+ASSET_MANAGER.queueDownload("./img/solar-wind.jpg");
 ASSET_MANAGER.queueDownload("./img/projectileU.png");
 ASSET_MANAGER.queueDownload("./img/projectileD.png");
 ASSET_MANAGER.queueDownload("./img/explosion.png");
@@ -598,6 +597,10 @@ ASSET_MANAGER.queueDownload("./img/GameOver.png");
 ASSET_MANAGER.queueDownload("./img/MainLogo1.png");
 ASSET_MANAGER.queueDownload("./img/MainLogo.png");
 ASSET_MANAGER.queueDownload("./img/start.png");
+ASSET_MANAGER.queueDownload("./img/newGame.png");
+ASSET_MANAGER.queueDownload("./img/loadGame.png");
+ASSET_MANAGER.queueDownload("./img/saveGame.png");
+ASSET_MANAGER.queueDownload("./img/aliens.png");
 
 ASSET_MANAGER.downloadAll(function () {
     console.log("starting up da sheild");
@@ -608,6 +611,8 @@ ASSET_MANAGER.downloadAll(function () {
     this.alienPic = ASSET_MANAGER.getAsset("./img/alien.png");
     this.space1 = ASSET_MANAGER.getAsset("./img/space1.png");
     this.space2 = ASSET_MANAGER.getAsset("./img/space2.png");
+    this.space3 = ASSET_MANAGER.getAsset("./img/space3.jpg");
+    this.space4 = ASSET_MANAGER.getAsset("./img/solar-wind.jpg");
     this.pro1 = ASSET_MANAGER.getAsset("./img/projectileU.png");
     this.pro2 = ASSET_MANAGER.getAsset("./img/projectileD.png");
     this.explosion = ASSET_MANAGER.getAsset("./img/explosion.png");
@@ -615,42 +620,175 @@ ASSET_MANAGER.downloadAll(function () {
     this.mainLogo = ASSET_MANAGER.getAsset("./img/MainLogo1.png");
     this.startButton = ASSET_MANAGER.getAsset("./img/start.png");
     this.mainLogo1 = ASSET_MANAGER.getAsset("./img/MainLogo.png");
-     
+    this.newGameImg = ASSET_MANAGER.getAsset("./img/newGame.png");
+    this.loadGameImg = ASSET_MANAGER.getAsset("./img/loadGame.png");
+    this.saveGameImg = ASSET_MANAGER.getAsset("./img/saveGame.png");
+
     this.gameEngine = new GameEngine();
-    var bg1 = new Platform(this.gameEngine, this.space1, 800, 800, 0, 0, false, 0, 0);
-    var bg2 = new Platform(this.gameEngine, this.space2, 800, 800, 0, 0, false, 0, 0);
+    this.bg1 = new Platform(this.gameEngine, this.space1, 800, 800, 0, 0, false, 0, 0);
+    this.bg2 = new Platform(this.gameEngine, this.space2, 800, 800, 0, 0, false, 0, 0);
+    this.bg3 = new Platform(this.gameEngine, this.space3, 800, 800, 0, 0, false, 0, 0);
+    this.bg4 = new Platform(this.gameEngine, this.space4, 800, 800, 0, 0, false, 0, 0);
 
-    if (Math.random() >= .5) {
-        this.gameEngine.addEntity(bg1);
-    } else {
-        this.gameEngine.addEntity(bg2);
-    }
-
-    lifeScoreImage();
+    pickBackground();
+    this.gameEngine.addEntity(this.gameEngine.backGround);
+    startGame();
     //basicControlImage(this.gameEngine);
-
-    this.gameEngine.addEntity(new Platform(this.gameEngine, mainLogo, 374, 254, 0, 0, false, 205, 120));
-    this.gameEngine.addEntity(new Button(this.gameEngine, this.startButton, 144, 106, 0, 0, false, 320, 500))
 
     gameEngine.init(ctx);
     gameEngine.start();
 });
 
+pickBackground = function () {
+    var wo = Math.random();
+    if (wo <= .25) {
+        this.gameEngine.backGround = this.bg1;
+    } else if (wo > .25 && wo <= .50) {
+        this.gameEngine.backGround = this.bg2;
+    } else if (wo > .50 && wo <= .75) {
+        this.gameEngine.backGround = this.bg3;
+    } else if (wo > .75 && wo <= 1) {
+        this.gameEngine.backGround = this.bg4;
+    }
+}
+
 startGame = function () {
+    this.gameEngine.addEntity(new Platform(this.gameEngine, this.mainLogo, 374, 254,
+        0, 0, false, 205, 120));
+    this.gameEngine.addEntity(new Button(this.gameEngine, this.startButton, 144, 106,
+        0, 0, false, 320, 500, 0));
+}
+
+gameMenu = function () {
     this.gameEngine.entities[this.gameEngine.entities.length - 1].removeFromWorld = true;
     this.gameEngine.entities[this.gameEngine.entities.length - 2].removeFromWorld = true;
+
+    this.gameEngine.addEntity(new Button(this.gameEngine, this.newGameImg, 161, 27,
+        0, 0, false, 310, 350, 1));
+
+    this.gameEngine.addEntity(new Button(this.gameEngine, this.loadGameImg, 178, 31,
+        0, 0, false, 310, 400, 2));
+}
+
+saveGame = function () {
+    var gameNum = prompt("Please enter a name that you will remember for when you want to load the game back.");
+    var gameData = [];
+
+    if (gameNum) {
+        gameData.push(this.gameEngine.score);
+        gameData.push(this.gameEngine.lifeCount);
+        gameData.push(this.gameEngine.ship.x);
+        gameData.push(this.gameEngine.ship.y);
+        gameData.push(this.gameEngine.alienRight);
+        gameData.push(this.gameEngine.alienShips.length);
+        for (var i = 0; i < this.gameEngine.alienShips.length; i++) {
+            gameData.push(this.gameEngine.alienShips[i].x);
+            gameData.push(this.gameEngine.alienShips[i].y);
+        }
+        //gameData.push(this.gameEngine.firedShots.length);
+        //for (var i = 0; i < this.gameEngine.firedShots.length; i++) {
+        //    gameData.push(this.gameEngine.firedShots[i].x);
+        //    gameData.push(this.gameEngine.firedShots[i].y);
+        //    gameData.push(this.gameEngine.firedShots[i].fromShip);
+        //}
+
+        this.socket.emit("save", { studentname: "Jason Hall", statename: gameNum, data: gameData });
+        //alert("Your game number is: " + gameNum + "\n Please keep it for when loading.");
+        for (var i = 1; i < this.gameEngine.entities.length; i++) {
+            this.gameEngine.entities[i].removeFromWorld = true;
+        }
+        startGame();
+    }
+}
+14578426
+newGame = function () {
+    this.gameEngine.entities[this.gameEngine.entities.length - 1].removeFromWorld = true;
+    this.gameEngine.entities[this.gameEngine.entities.length - 2].removeFromWorld = true;
+
     alert("To move ship left: left arrow; To move ship right: right arrow; to move ship down: down arrow; to move ship up: up arrow; To fire: space bar.");
+    this.gameEngine.saveButton = new Button(this.gameEngine, this.saveGameImg, 178, 31,
+        0, 0, false, 622, 769, 3)
+    this.gameEngine.addEntity(this.gameEngine.saveButton);
+    this.gameEngine.lifeCount = 4;
+    lifeScoreImage();
     addLife();
-    addShip();
+    addShip(300,600);
     addAlienShips(3, 6);
 }
+
+loadGame = function () {
+    var that = this;
+    var loadData = [];
+
+    this.gameEngine.entities[this.gameEngine.entities.length - 1].removeFromWorld = true;
+    this.gameEngine.entities[this.gameEngine.entities.length - 2].removeFromWorld = true;
+
+    var gameNum = prompt("What is the game number that you want to load?");
+    console.log(gameNum);
+    if (!gameNum) {
+        startGame();
+    } else {
+        this.socket.emit("load", { studentname: "Jason Hall", statename: gameNum });
+    }
+
+    this.socket.on("load", function (data) {
+        loadData = data.data;
+        console.log(loadData);
+        that.gameEngine.saveButton = new Button(that.gameEngine, that.saveGameImg, 178, 31,
+        0, 0, false, 622, 769, 3)
+        that.gameEngine.addEntity(that.gameEngine.saveButton);
+        that.gameEngine.score = loadData[0];
+        that.gameEngine.lifeCount = loadData[1];
+        lifeScoreImage();
+        addLife();
+        addShip(loadData[2], loadData[3])
+        that.gameEngine.alienRight = loadData[4];
+        for (var i = 0; i < loadData[5]; i++) {
+            addAlienShip(loadData[6 + i * 2], loadData[7 + i * 2]);
+        }
+        console.log(loadData[6 + loadData[5] * 2]);
+        var shotsFired = 6 + loadData[5] * 2;
+        var shotX = 7 + loadData[5] * 2;
+        var shotY = 8 + loadData[5] * 2;
+        var shotZ = 9 + loadData[5] * 2;
+        //for (var i = 0; i < loadData[shotsFired]; i++) {
+        //    if (loadData[shotY + i * 3] > 0) {
+        //        addShot(loadData[shotX + i * 3], loadData[shotY + i * 3],
+        //            loadData[shotZ + i * 3]);
+        //        console.log("x: " + loadData[shotX + i * 3]);
+        //        console.log("y: " + loadData[shotY + i * 3]);
+        //        console.log("z: " + loadData[shotZ + i * 3]);
+        //    }
+        //}
+
+    });
+
+}
+
+addShot = function (x, y, z) {
+    var fShot = new FireBall(this.gameEngine, this.firePic, 21, 5, 0, 0,
+        x, y, false, 1, 0, 0, z);
+
+    this.gameEngine.addEntity(fShot);
+    this.gameEngine.firedShots.push(fShot);
+}
+
+socket.on("connect", function () {
+    console.log("Socket connected.")
+});
+socket.on("disconnect", function () {
+    console.log("Socket disconnected.")
+});
+socket.on("reconnect", function () {
+    console.log("Socket reconnected.")
+});
 
 minusLife = function () {
     this.gameEngine.lifeCount -= 1;
 
     if (this.gameEngine.lifeCount > 0) {
         this.gameEngine.ship.removeFromWorld = true;
-        addShip();
+        addShip(300, 600);
         var killX = this.gameEngine.lifeShips[this.gameEngine.lifeCount - 1].beginingX();
         var killY = this.gameEngine.lifeShips[this.gameEngine.lifeCount - 1].top();
         this.gameEngine.lifeShips[this.gameEngine.lifeCount - 1].removeFromWorld = true;
@@ -672,51 +810,47 @@ gameOver = function () {
     for (i = 0; i < this.gameEngine.alienShips.length; i++) {
         this.gameEngine.alienShips[i].removeFromWorld = true;
     }
-
+    this.gameEngine.saveButton.removeFromWorld = true;
     var gameO = new Platform(this.gameEngine, gameOverSprite, 178, 178, 0, 0, false, 320, 220);
     this.gameEngine.addEntity(gameO);
 }
-    projectileExplosion = function (x, y) {
-        this.gameEngine.addEntity(new ProjectileExp(this.gameEngine, this.explosion,
-            39.4, 40, 0, 0, .1, 13, false, false, x, y));
+projectileExplosion = function (x, y) {
+    this.gameEngine.addEntity(new ProjectileExp(this.gameEngine, this.explosion,
+        39.4, 40, 0, 0, .1, 13, false, false, x, y));
+}
+
+addLife = function () {
+    for (var i = 0; i < this.gameEngine.lifeCount - 1; i++) {
+        var lShip = new Platform(this.gameEngine, this.shipPic, 31, 37, 0, 0,
+            false, 707 + (i * 29), 0);
+        this.gameEngine.addEntity(lShip);
+        this.gameEngine.lifeShips[i] = lShip;
+        if (i === 1) this.gameEngine.lifeIndex = this.gameEngine.entities.length - 1;
     }
+}
 
-    addLife = function () {
+addShip = function (x, y) {
+    this.gameEngine.ship = new Ship(this.gameEngine, this.shipPic, 37, 31, 0, 0, x, y, false, 2, 0, 0, 2, this.pro1);
+    this.gameEngine.addEntity(this.gameEngine.ship);
+}
 
-        for (var i = 0; i < 3; i++) {
-            var lShip = new Platform(this.gameEngine, this.shipPic, 31, 37, 0, 0,
-                false, 707 + (i * 29), 0);
-            this.gameEngine.addEntity(lShip);
-            this.gameEngine.lifeShips[i] = lShip;
-            if (i === 1) this.gameEngine.lifeIndex = this.gameEngine.entities.length - 1;
+addAlienShip = function (x, y) {
+    this.gameEngine.alienShips.push(new Alien(this.gameEngine, this.alienPic, 66, 67, 0, 0,
+        x, y, false, 1, 0, 0, this.pro2));
+    this.gameEngine.addEntity(this.gameEngine.alienShips[this.gameEngine.alienShips.length - 1]);
+}
+
+addAlienShips = function (numRow, numCol) {
+    var count = 0;
+    for (var i = 1; i <= numRow; i++) {
+        for (var j = 1; j <= numCol; j++) {
+            this.gameEngine.alienShips[count] = new Alien(this.gameEngine, this.alienPic, 66, 67, 0, 0,
+                j * 100, i * 100 + 25, false, 1, 0, 0, this.pro2);
+            this.gameEngine.addEntity(this.gameEngine.alienShips[count]);
+            count++;
         }
-
-        this.gameEngine.lifeCount = 4;
     }
-
-    addShip = function () {
-        var ship = new Ship(this.gameEngine, this.shipPic, 37, 31, 0, 0, 300, 600, false, 2, 0, 0, 2, this.pro1);
-
-        this.gameEngine.addEntity(ship);
-        this.gameEngine.ship = ship;
-    }
-
-    addAlienShips = function (numRow, numCol) {
-        var count = 0;
-        for (var i = 1; i <= numRow; i++) {
-            for (var j = 1; j <= numCol; j++) {
-                var aShip = new Alien(this.gameEngine, this.alienPic, 66, 67, 0, 0,
-                    j * 100, i * 100 + 25, false, 1, 0, 0, this.pro2);
-                this.gameEngine.addEntity(aShip);
-                this.gameEngine.alienShips[count] = aShip;
-                count++;
-                if (i === 1 && j === 1) {
-                    this.gameEngine.aStartIndex = this.gameEngine.entities.length - 1;
-                }
-            }
-        }
-        this.gameEngine.aTotalShips = numRow * numCol;
-    }
+}
 
  lifeScoreImage = function () {
         // L

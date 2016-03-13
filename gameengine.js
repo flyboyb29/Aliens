@@ -39,16 +39,19 @@ function GameEngine() {
     this.surfaceHeight = null;
     this.aStartIndex = 0;
     this.aTotalShips = 0;
+    this.backGround = null;
     this.ship = null;
     this.alienShips = [];
     this.lifeShips = [];
     this.firedShots = [];
     this.gameOver = [];
+    this.saveButton;
     this.lifeIndexStart = 0;
     this.lifeCount = 0;
     this.score = 0;
     this.mouseX = 0;
     this.mouseY = 0;
+    this.alienRight;
 }
 
 GameEngine.prototype.init = function (ctx) {
